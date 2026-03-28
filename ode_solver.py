@@ -1,33 +1,75 @@
 #!/usr/bin/env python3
-"""ODE solvers: Euler, RK4, adaptive RK45."""
-def euler(f,y0,t0,t1,h):
-    t,y=t0,y0;points=[(t,y)]
-    while t<t1: y=y+h*f(t,y);t+=h;points.append((t,y))
-    return points
-def rk4(f,y0,t0,t1,h):
-    t,y=t0,y0;points=[(t,y)]
-    while t<t1:
-        k1=f(t,y);k2=f(t+h/2,y+h/2*k1);k3=f(t+h/2,y+h/2*k2);k4=f(t+h,y+h*k3)
-        y=y+h/6*(k1+2*k2+2*k3+k4);t+=h;points.append((t,y))
-    return points
-def rk45(f,y0,t0,t1,tol=1e-6,h=0.1):
-    t,y=t0,y0;points=[(t,y)]
-    while t<t1:
-        k1=h*f(t,y);k2=h*f(t+h/4,y+k1/4);k3=h*f(t+3*h/8,y+3*k1/32+9*k2/32)
-        k4=h*f(t+12*h/13,y+1932*k1/2197-7200*k2/2197+7296*k3/2197)
-        k5=h*f(t+h,y+439*k1/216-8*k2+3680*k3/513-845*k4/4104)
-        k6=h*f(t+h/2,y-8*k1/27+2*k2-3544*k3/2565+1859*k4/4104-11*k5/40)
-        y4=y+25*k1/216+1408*k3/2565+2197*k4/4104-k5/5
-        y5=y+16*k1/135+6656*k3/12825+28561*k4/56430-9*k5/50+2*k6/55
-        err=abs(y5-y4)
-        if err<tol: t+=h;y=y5;points.append((t,y))
-        h*=0.9*(tol/max(err,1e-20))**0.2;h=min(h,t1-t) if t+h>t1 else h
-    return points
-if __name__=="__main__":
-    import math
-    f=lambda t,y:-y;exact=lambda t:math.exp(-t)
-    e=euler(f,1.0,0,2,0.01);r=rk4(f,1.0,0,2,0.01);a=rk45(f,1.0,0,2)
-    print(f"Euler err: {abs(e[-1][1]-exact(2)):.6f}")
-    print(f"RK4 err: {abs(r[-1][1]-exact(2)):.10f}")
-    print(f"RK45 err: {abs(a[-1][1]-exact(2)):.10f} ({len(a)} steps)")
-    print("ODE solvers OK")
+"""ode_solver - Ordinary differential equation solvers."""
+import argparse, math, json
+
+def euler(f, y0, t0, t_end, dt):
+    t, y = t0, y0; history = [(t, y)]
+    while t < t_end:
+        y = y + dt * f(t, y); t += dt
+        history.append((t, y))
+    return history
+
+def rk4(f, y0, t0, t_end, dt):
+    t, y = t0, y0; history = [(t, y)]
+    while t < t_end:
+        k1 = f(t, y)
+        k2 = f(t+dt/2, y+dt/2*k1)
+        k3 = f(t+dt/2, y+dt/2*k2)
+        k4 = f(t+dt, y+dt*k3)
+        y = y + dt/6*(k1+2*k2+2*k3+k4); t += dt
+        history.append((t, y))
+    return history
+
+def euler_system(f, y0, t0, t_end, dt):
+    t, y = t0, list(y0); history = [(t, list(y))]
+    while t < t_end:
+        dy = f(t, y)
+        y = [yi + dt*dyi for yi, dyi in zip(y, dy)]; t += dt
+        history.append((t, list(y)))
+    return history
+
+def rk4_system(f, y0, t0, t_end, dt):
+    t = t0; y = list(y0); n = len(y); history = [(t, list(y))]
+    while t < t_end:
+        k1 = f(t, y)
+        k2 = f(t+dt/2, [y[i]+dt/2*k1[i] for i in range(n)])
+        k3 = f(t+dt/2, [y[i]+dt/2*k2[i] for i in range(n)])
+        k4 = f(t+dt, [y[i]+dt*k3[i] for i in range(n)])
+        y = [y[i]+dt/6*(k1[i]+2*k2[i]+2*k3[i]+k4[i]) for i in range(n)]; t += dt
+        history.append((t, list(y)))
+    return history
+
+def main():
+    p = argparse.ArgumentParser(description="ODE solver")
+    p.add_argument("--demo", choices=["exponential", "harmonic", "lorenz", "predator-prey"], default="exponential")
+    p.add_argument("-m", "--method", choices=["euler", "rk4"], default="rk4")
+    p.add_argument("--dt", type=float, default=0.01)
+    p.add_argument("--t-end", type=float, default=10)
+    args = p.parse_args()
+    if args.demo == "exponential":
+        f = lambda t, y: -0.5 * y
+        history = rk4(f, 1.0, 0, args.t_end, args.dt) if args.method=="rk4" else euler(f, 1.0, 0, args.t_end, args.dt)
+        exact = lambda t: math.exp(-0.5*t)
+        for t, y in history[::len(history)//10]:
+            print(f"  t={t:.2f}: y={y:.6f} exact={exact(t):.6f} err={abs(y-exact(t)):.2e}")
+    elif args.demo == "harmonic":
+        f = lambda t, y: [y[1], -y[0]]
+        history = rk4_system(f, [1.0, 0.0], 0, args.t_end, args.dt)
+        for t, y in history[::len(history)//10]:
+            print(f"  t={t:.2f}: x={y[0]:.4f} v={y[1]:.4f}")
+    elif args.demo == "lorenz":
+        sigma, rho, beta = 10, 28, 8/3
+        f = lambda t, y: [sigma*(y[1]-y[0]), y[0]*(rho-y[2])-y[1], y[0]*y[1]-beta*y[2]]
+        history = rk4_system(f, [1,1,1], 0, min(args.t_end, 50), args.dt)
+        print(f"Lorenz attractor ({len(history)} points)")
+        for t, y in history[::len(history)//20]:
+            print(f"  t={t:.1f}: ({y[0]:.2f}, {y[1]:.2f}, {y[2]:.2f})")
+    elif args.demo == "predator-prey":
+        a, b, c, d = 1.1, 0.4, 0.4, 0.1
+        f = lambda t, y: [a*y[0]-b*y[0]*y[1], -c*y[1]+d*y[0]*y[1]]
+        history = rk4_system(f, [10, 5], 0, args.t_end, args.dt)
+        for t, y in history[::len(history)//10]:
+            print(f"  t={t:.1f}: prey={y[0]:.1f} predator={y[1]:.1f}")
+
+if __name__ == "__main__":
+    main()

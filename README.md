@@ -1,13 +1,11 @@
-# Ode Solver
+# ode-solver
 
-ODE solvers: Euler, RK4, adaptive RK45.
+ODE solver (Euler, RK4, adaptive).
+
+Zero dependencies. Python 3.8+.
 
 ## Usage
 
 ```bash
-python3 ode_solver.py
+python3 ode_solver.py --help
 ```
-
-## License
-
-MIT
