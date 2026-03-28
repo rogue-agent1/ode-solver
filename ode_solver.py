@@ -1,51 +1,33 @@
 #!/usr/bin/env python3
-"""ODE Solver — Euler, RK4, adaptive RK45 (Dormand-Prince)."""
-import math, sys
-
-def euler(f, y0, t_span, dt=0.01):
-    t, y = t_span[0], y0; ts, ys = [t], [y]
-    while t < t_span[1]:
-        y = y + dt * f(t, y); t += dt
-        ts.append(t); ys.append(y)
-    return ts, ys
-
-def rk4(f, y0, t_span, dt=0.01):
-    t, y = t_span[0], y0; ts, ys = [t], [y]
-    while t < t_span[1]:
-        k1 = f(t, y); k2 = f(t+dt/2, y+dt*k1/2)
-        k3 = f(t+dt/2, y+dt*k2/2); k4 = f(t+dt, y+dt*k3)
-        y = y + dt*(k1 + 2*k2 + 2*k3 + k4)/6; t += dt
-        ts.append(t); ys.append(y)
-    return ts, ys
-
-def rk45(f, y0, t_span, tol=1e-6, dt=0.01):
-    """Adaptive RK45 (Dormand-Prince coefficients)."""
-    a2,a3,a4,a5,a6 = 1/4, 3/8, 12/13, 1, 1/2
-    b = [[],[1/4],[3/32,9/32],[1932/2197,-7200/2197,7296/2197],
-         [439/216,-8,3680/513,-845/4104],[-8/27,2,-3544/2565,1859/4104,-11/40]]
-    c = [25/216,0,1408/2565,2197/4104,-1/5,0]
-    cs = [16/135,0,6656/12825,28561/56430,-9/50,2/55]
-    t, y = t_span[0], y0; ts, ys = [t], [y]
-    while t < t_span[1]:
-        k = [f(t, y)]
-        for i in range(1, 6):
-            ti = t + [0,a2,a3,a4,a5,a6][i]*dt
-            yi = y + dt*sum(b[i][j]*k[j] for j in range(i))
-            k.append(f(ti, yi))
-        y4 = y + dt*sum(c[i]*k[i] for i in range(6))
-        y5 = y + dt*sum(cs[i]*k[i] for i in range(6))
-        err = abs(y5 - y4)
-        if err < tol or dt < 1e-12:
-            y = y5; t += dt; ts.append(t); ys.append(y)
-        dt = min(dt * max(0.1, 0.84*(tol/max(err,1e-30))**0.25), t_span[1]-t) if err > 0 else dt
-    return ts, ys
-
-if __name__ == "__main__":
-    f = lambda t, y: -2*y  # dy/dt = -2y, exact: e^(-2t)
-    exact = lambda t: math.exp(-2*t)
-    for name, solver in [("Euler", euler), ("RK4", rk4)]:
-        ts, ys = solver(f, 1.0, (0, 2), dt=0.1)
-        err = abs(ys[-1] - exact(ts[-1]))
-        print(f"{name:6s}: y(2)={ys[-1]:.8f}, error={err:.2e}")
-    ts, ys = rk45(f, 1.0, (0, 2))
-    print(f"RK45:   y(2)={ys[-1]:.8f}, error={abs(ys[-1]-exact(ts[-1])):.2e}, steps={len(ts)}")
+"""ODE solvers: Euler, RK4, adaptive RK45."""
+def euler(f,y0,t0,t1,h):
+    t,y=t0,y0;points=[(t,y)]
+    while t<t1: y=y+h*f(t,y);t+=h;points.append((t,y))
+    return points
+def rk4(f,y0,t0,t1,h):
+    t,y=t0,y0;points=[(t,y)]
+    while t<t1:
+        k1=f(t,y);k2=f(t+h/2,y+h/2*k1);k3=f(t+h/2,y+h/2*k2);k4=f(t+h,y+h*k3)
+        y=y+h/6*(k1+2*k2+2*k3+k4);t+=h;points.append((t,y))
+    return points
+def rk45(f,y0,t0,t1,tol=1e-6,h=0.1):
+    t,y=t0,y0;points=[(t,y)]
+    while t<t1:
+        k1=h*f(t,y);k2=h*f(t+h/4,y+k1/4);k3=h*f(t+3*h/8,y+3*k1/32+9*k2/32)
+        k4=h*f(t+12*h/13,y+1932*k1/2197-7200*k2/2197+7296*k3/2197)
+        k5=h*f(t+h,y+439*k1/216-8*k2+3680*k3/513-845*k4/4104)
+        k6=h*f(t+h/2,y-8*k1/27+2*k2-3544*k3/2565+1859*k4/4104-11*k5/40)
+        y4=y+25*k1/216+1408*k3/2565+2197*k4/4104-k5/5
+        y5=y+16*k1/135+6656*k3/12825+28561*k4/56430-9*k5/50+2*k6/55
+        err=abs(y5-y4)
+        if err<tol: t+=h;y=y5;points.append((t,y))
+        h*=0.9*(tol/max(err,1e-20))**0.2;h=min(h,t1-t) if t+h>t1 else h
+    return points
+if __name__=="__main__":
+    import math
+    f=lambda t,y:-y;exact=lambda t:math.exp(-t)
+    e=euler(f,1.0,0,2,0.01);r=rk4(f,1.0,0,2,0.01);a=rk45(f,1.0,0,2)
+    print(f"Euler err: {abs(e[-1][1]-exact(2)):.6f}")
+    print(f"RK4 err: {abs(r[-1][1]-exact(2)):.10f}")
+    print(f"RK45 err: {abs(a[-1][1]-exact(2)):.10f} ({len(a)} steps)")
+    print("ODE solvers OK")
