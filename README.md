@@ -1,6 +1,6 @@
-# ode-solver
+# ODE Solver
 
-ODE solver with Euler, RK4, and adaptive step methods
+ODE Solver — zero-dependency, single-file Python CLI.
 
 ## Usage
 
@@ -8,7 +8,6 @@ ODE solver with Euler, RK4, and adaptive step methods
 python3 ode_solver.py --help
 ```
 
-## Features
+## License
 
-- Zero dependencies (Python 3.8+ stdlib only)
-- Single file implementation
+MIT
